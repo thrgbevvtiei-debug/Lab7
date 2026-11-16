@@ -5,29 +5,32 @@ namespace App\Http\Controllers;
 use App\Http\Requests\CarRequest;
 use App\Models\Car;
 use App\Models\Feature;
+use App\Queries\CarFilter;
 use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
 
 class CarController extends Controller
 {
-    public function index(Request $request)
+    public function index(Request $request, CarFilter $filter)
     {
-        $query = Car::query()->withTranslation()->withCount('features');
+        $input = $request->validate([
+            'q'           => ['nullable', 'string', 'max:100'],
+            'featureName' => ['nullable', 'string', 'max:100'],
+            'brand'       => ['nullable', 'string', 'max:50'],
+            'feature_id'  => ['nullable', 'integer', 'exists:features,id'],
+            'sort'        => ['nullable', 'string', 'max:30'],
+        ]);
 
-        // Фільтрація: якщо brand немає в запиті, показуємо всі авто
-        if ($request->filled('brand')) {
-            $query->where('brand', $request->query('brand'));
-        }
-
-        // withQueryString() зберігає ?brand=... при переході між сторінками
-        $cars = $query->orderBy('brand')
-            ->orderBy('model')
+        // withQueryString() зберігає всі параметри при переході між сторінками
+        $cars = $filter->apply($input)
             ->paginate(5)
             ->withQueryString();
 
-        $brands = Car::query()->distinct()->orderBy('brand')->pluck('brand');
-
-        return view('cars.index', compact('cars', 'brands'));
+        return view('cars.index', [
+            'cars'     => $cars,
+            'brands'   => Car::query()->distinct()->orderBy('brand')->pluck('brand'),
+            'features' => Feature::orderBy('name')->pluck('name', 'id'),
+        ]);
     }
 
     public function create()
